@@ -115,31 +115,43 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 		toroll |= diceturn.Die2
 	}
 
-	fmt.Printf("Rolled dice: %b\n", toroll)
-	if tp.NumRolls == 0 {
+	fmt.Printf("Rolled dice: %03b\n", toroll)
+
+	switch tp.NumRolls {
+	case 0:
 		if toroll != diceturn.AllDice {
 			return fmt.Errorf("Must roll all dice on the first roll")
 		}
-	} else {
-		// Make sure they're keeping at least one die for roll two
-		// AND: if they kept two dice on roll one, they can re-roll the remaining
-		// die on turn 3
-		// Validate they're not re-rolling a kept die
-		fmt.Printf("Previously kept: 0x%03b, rolling 0x%03b, reroll 0x%03b\n",
-			tp.Rolls[0].Kept, toroll, tp.Rolls[0].Kept&toroll)
-		if tp.NumRolls == 2 {
-			// Make sure nothing kept is being rerolled
-			// TODO: The triple-5 exception (can roll one kept die if two rolled die are both fives)
-			if tp.Rolls[0].Kept&toroll != 0 {
-				return fmt.Errorf("Cannot re-roll a kept die (0x%03b)", tp.Rolls[0].Kept&toroll)
-			}
-		}
 
-		// TODO: Make sure they're only rolling one die
-		// Update prior roll's kept value
-		fmt.Printf("Set kept for roll %d to 0x%03b\n", tp.NumRolls-1, ^toroll&diceturn.AllDice)
-		tp.Rolls[tp.NumRolls-1].Kept = ^toroll & diceturn.AllDice
+	case 1:
+		fmt.Printf("Kept from roll 1: 0x%03b, rolling 0x%03b, reroll 0x%03b\n",
+			tp.Rolls[0].Kept, toroll, tp.Rolls[0].Kept&toroll)
+		if tp.Rolls[0].Kept&toroll != 0 {
+			return fmt.Errorf("Cannot re-roll a kept die (0x%03b)", tp.Rolls[0].Kept&toroll)
+		}
+	case 2:
+		fmt.Printf("Kept from roll 2: 0x%03b, rolling 0x%03b, reroll 0x%03b\n",
+			tp.Rolls[1].Kept, toroll, tp.Rolls[1].Kept&toroll)
+		if tp.Rolls[1].Kept&toroll != 0 {
+			// The special case: after roll 2,
+		}
 	}
+
+	// Make sure they're keeping at least one die for roll two
+	// AND: if they kept two dice on roll one, they can re-roll the remaining
+	// die on turn 3
+	// Validate they're not re-rolling a kept die
+
+	// if tp.NumRolls == 2 {
+	// Make sure nothing kept is being rerolled
+	// TODO: The triple-5 exception (can roll one kept die if two rolled die are both fives)
+	// }
+
+	// TODO: Make sure they're only rolling one die
+	// Update prior roll's kept value
+	//fmt.Printf("Set kept for roll %d to 0x%03b\n", tp.NumRolls-1, ^toroll&diceturn.AllDice)
+	//tp.Rolls[tp.NumRolls-1].Kept = ^toroll & diceturn.AllDice
+	// }
 
 	tp.Rolls = append(tp.Rolls, diceturn.DiceRoll{Rolled: toroll})
 	drp := &tp.Rolls[tp.NumRolls]
@@ -156,6 +168,7 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 	if toroll&diceturn.Die2 != 0 {
 		drp.RollResults[2] = d3
 	}
+	drp.Kept = ^toroll & diceturn.AllDice
 
 	tp.NumRolls++
 	fmt.Printf("After: %v\n", tp)
