@@ -99,9 +99,16 @@ func (dg DiceGame) CurTurn() string {
 	return s
 }
 
+func (dg *DiceGame) RollCheck(dmap int) error {
+	return dg.Turns[len(dg.Turns)-1].RollCheck(dmap)
+}
+
 func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 	fmt.Printf("Rolling %d %d %d\n", d1, d2, d3)
 	tp := &dg.Turns[len(dg.Turns)-1]
+	if tp.NumRolls >= 3 {
+		return fmt.Errorf("Cannot roll (%d rolls already)", tp.NumRolls)
+	}
 	fmt.Printf("Before: %v\n", tp)
 
 	toroll := 0
@@ -117,6 +124,8 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 
 	fmt.Printf("Rolled dice: %03b\n", toroll)
 
+	var prevroll *diceturn.DiceRoll = nil
+
 	switch tp.NumRolls {
 	case 0:
 		if toroll != diceturn.AllDice {
@@ -124,12 +133,16 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 		}
 
 	case 1:
+		prevroll = &tp.Rolls[0]
+		prevroll.Kept = ^toroll & diceturn.AllDice
 		fmt.Printf("Kept from roll 1: 0x%03b, rolling 0x%03b, reroll 0x%03b\n",
 			tp.Rolls[0].Kept, toroll, tp.Rolls[0].Kept&toroll)
 		if tp.Rolls[0].Kept&toroll != 0 {
 			return fmt.Errorf("Cannot re-roll a kept die (0x%03b)", tp.Rolls[0].Kept&toroll)
 		}
 	case 2:
+		prevroll = &tp.Rolls[1]
+		prevroll.Kept = ^toroll & diceturn.AllDice
 		fmt.Printf("Kept from roll 2: 0x%03b, rolling 0x%03b, reroll 0x%03b\n",
 			tp.Rolls[1].Kept, toroll, tp.Rolls[1].Kept&toroll)
 		if tp.Rolls[1].Kept&toroll != 0 {
@@ -168,7 +181,6 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 	if toroll&diceturn.Die2 != 0 {
 		drp.RollResults[2] = d3
 	}
-	drp.Kept = ^toroll & diceturn.AllDice
 
 	tp.NumRolls++
 	fmt.Printf("After: %v\n", tp)

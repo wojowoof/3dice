@@ -23,6 +23,17 @@ func dispatch(dg *dicegame.DiceGame, argv []string) (int, error) {
 		fmt.Printf("Turn: %s\n", dg.CurTurn())
 	} else if 0 == strings.Compare("score", argv[0]) {
 		fmt.Printf("Scorecard:\n%s", dg.Scorecard())
+	} else if 0 == strings.Compare("rollcheck", argv[0]) {
+		if len(argv) < 2 {
+			return 1, fmt.Errorf("ERROR: Must specify roll bitmap")
+		} else if len(argv) > 2 {
+			return 1, fmt.Errorf("ERROR: usage: rollcheck <dicebits>")
+		}
+		if dmap, err := strconv.ParseInt(argv[1], 0, 32); err != nil {
+			return 1, fmt.Errorf("ERROR: Invalid dicemap specification: %s", argv[1])
+		} else if e := dg.RollCheck(int(dmap)); e != nil {
+			fmt.Printf("Cannot roll 0x%03b: %v\n", dmap, e)
+		}
 	} else if 0 == strings.Compare("roll", argv[0]) {
 		if len(argv) < 2 {
 			fmt.Printf("ERROR: must specify dice values")
@@ -70,7 +81,7 @@ func interact(dg *dicegame.DiceGame) {
 		argv := strings.Fields(text)
 
 		if goon, err := dispatch(dg, argv); err != nil {
-			fmt.Printf("Error with %s: %v", argv[0], err)
+			fmt.Printf("Error with %s: %v\n", argv[0], err)
 		} else if goon == 0 {
 			break
 		}
