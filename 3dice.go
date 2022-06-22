@@ -33,6 +33,8 @@ func dispatch(dg *dicegame.DiceGame, argv []string) (int, error) {
 			return 1, fmt.Errorf("ERROR: Invalid dicemap specification: %s", argv[1])
 		} else if e := dg.RollCheck(int(dmap)); e != nil {
 			fmt.Printf("Cannot roll 0x%03b: %v\n", dmap, e)
+		} else {
+			fmt.Printf("Sure, roll 0x%03b!!!\n", dmap)
 		}
 	} else if 0 == strings.Compare("roll", argv[0]) {
 		if len(argv) < 2 {

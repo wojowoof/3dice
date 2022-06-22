@@ -1,7 +1,7 @@
 package diceturn
 
 import (
-	//	"fmt"
+	"fmt"
 	"testing"
 )
 
@@ -47,6 +47,23 @@ func TestAllKept(t *testing.T) {
 	}
 }
 
+func echeck(t *testing.T, fcall func() error, descr string, experror bool) {
+	e := fcall()
+	if experror {
+		if e == nil {
+			t.Errorf("Failed to disallow %s", descr)
+		} else {
+			t.Logf("Properly disallowed %s (%v)", descr, e)
+		}
+	} else {
+		if e != nil {
+			t.Errorf("Failed to allow %s (%v)", descr, e)
+		} else {
+			t.Logf("Properly alowed %s", descr)
+		}
+	}
+}
+
 func TestRollCheck(t *testing.T) {
 	dt := DiceTurn{NumRolls: 0, Rolls: []DiceRoll{}}
 	// First Roll: must roll everything
@@ -55,18 +72,73 @@ func TestRollCheck(t *testing.T) {
 	} else {
 		t.Logf("Allow roll of all dice on first roll")
 	}
-	if e := dt.RollCheck(Die1); e == nil {
-		t.Errorf("Oops - shouldn't allow roll of %s on first roll", diename[Die1])
-	} else {
-		t.Logf("Properly disallowed roll of %s on first roll (%v)", diename[Die1], e)
+	for _, d := range []DieID{Die0, Die1, Die2, Die0 | Die1, Die1 | Die2, Die0 | Die2} {
+		echeck(t, func() error { return dt.RollCheck(int(d)) },
+			fmt.Sprintf("roll of 0x%03b on first roll", d), true)
 	}
 
-	// Second roll: disallow rerolling any kept dice
+	// Advancve the turn - first roll, rolled all dice. NOTE: setting Kept
+	// here is bogus; it's not (and sholdn't be) used to check things.
 	dt.Rolls = append(dt.Rolls, DiceRoll{Rolled: AllDice, Kept: Die0})
+	dt.NumRolls++
 
-	if e := dt.RollCheck(Die1); e != nil {
-		t.Logf("Properly diallowed reroll of %s on second roll (%v)", diename[Die0], e)
+	if e := dt.RollCheck(AllDice); e == nil {
+		t.Errorf("Improperly allowed roll of all dice on second roll")
 	} else {
-		t.Errorf("Improperly allowed reroll of %s on second roll", diename[Die0])
+		t.Logf("Properly disallowed roll of all dice on roll 2: %v", e)
 	}
+
+	for _, d := range []DieID{Die0 | Die1, Die1 | Die2, Die0, Die1, Die2} {
+		echeck(t, func() error { return dt.RollCheck(int(d)) },
+			fmt.Sprintf("roll of 0x%03b on second roll", d), false)
+		if e := dt.RollCheck(int(d)); e != nil {
+			t.Errorf("roll of 0x%03b on second roll (%v)\n", d, e)
+		}
+	}
+
+	// Last roll - the tough one
+	// * Typical: held 1 die on roll 1, will hold one from roll 2
+	dt.Rolls[0].Kept = Die0
+	dt.Rolls[0].RollResults = [3]int{1, 2, 4}
+
+	dt.Rolls = append(dt.Rolls, DiceRoll{Rolled: Die1 | Die2, Kept: Die1})
+	dt.NumRolls = 2
+
+	// Now: check to see what can be Rolled - should just be Die3
+	echeck(t, func() error { return dt.RollCheck(Die2) },
+		"rolling a single unrolled die on turn 3", false)
+
+	// Disallow previously rolled die, individually and together
+	for _, d := range []DieID{Die0, Die1} {
+		echeck(t, func() error { return dt.RollCheck(int(d)) },
+			fmt.Sprintf("rerolling a previously kept die (%s) on roll 2", diename[d]), true)
+	}
+	echeck(t, func() error { return dt.RollCheck(int(Die0 | Die1)) },
+		fmt.Sprintf("rerolling both previously kept dice on roll 2"), true)
+
+	// Never actually happens: genius kept two non-matching dice after turn 1, wants
+	// to reroll third die on turn3
+	dt.Rolls[0].Kept = Die0 | Die1
+	dt.Rolls[0].Rolled = AllDice
+	dt.Rolls[0].RollResults = [3]int{1, 2, 4}
+	dt.Rolls[1].Rolled = Die2
+	dt.Rolls[1].RollResults = [3]int{0, 0, 5}
+	dt.NumRolls = 2
+
+	// No actual combinations should work - the turn must end!
+	// ARGUMENTATIVE: why not allow this idiot to roll?
+	for _, d := range []DieID{Die0, Die1, Die2, Die0 | Die1, Die1 | Die2, Die2 | Die0, Die0 | Die1 | Die2} {
+		echeck(t, func() error { return dt.RollCheck(int(d)) },
+			fmt.Sprintf("rolling anything (0x%03b) on roll 3 after keeping 2 non-matching on roll 1", d),
+			true)
+	}
+
+	// Special 1: previously kept two matching die after the first roll, allow reroll on third
+
+	//
+	// if e := dt.RollCheck(Die1); e != nil {
+	// 	t.Logf("Properly diallowed reroll of %s on second roll (%v)", diename[Die0], e)
+	// } else {
+	// 	t.Errorf("Improperly allowed reroll of %s on second roll", diename[Die0])
+	// }
 }

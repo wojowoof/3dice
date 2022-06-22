@@ -4,10 +4,11 @@ import (
 	"fmt"
 )
 
-// Identify die by bits in an int: 00000001b is die 0, 00000010 is die 1
+// DieID - Identify die by bits in an int: 00000001b is die 0, 00000010 is die 1
 // Can then identify which dice were rolled with a single field
 type DieID int
 
+// Die values
 const (
 	Die0    = 0x01
 	Die1    = 0x02
@@ -26,6 +27,13 @@ const (
 	DieVal000 = 5
 )
 
+// DiceRoll - describes a roll of the dice.
+// NOTE THAT: operationally, the Kept field is determined on the NEXT ROLL; in
+//     other words, it's only valid *after* the *next* roll; it CANNOT be used
+//     to validate which dice to roll on the next roll. ALSO: It's an open
+//		 question for the second roll if it's all the dice kept in roll 1 and 2
+//		 or just those kept from those rolled in roll 2. If the latter, than Kept
+//		 will aways be a subset of Rolled.
 type DiceRoll struct {
 	Rolled      int    // bitmap: xxxxx111 = all, xxxxx001 is color die, etc.
 	RollResults [3]int // New values are those indicated by Rolled; if bit not set, then value comes from prior roll
@@ -144,6 +152,7 @@ func allkeptsame(dr DiceRoll) bool {
 	return true
 }
 
+// RollCheck - check a roll
 func (dt DiceTurn) RollCheck(toroll int) error {
 	switch dt.NumRolls {
 	case 0:
@@ -159,7 +168,10 @@ func (dt DiceTurn) RollCheck(toroll int) error {
 		prevkept := dt.Rolls[1].Kept
 		// If two dice were kept on the previous roll, then you can roll again only if
 		// you are going for triples
+		fmt.Printf("Roll %v: previously kept 0b%03b\n", 1+dt.NumRolls, prevkept)
 		if 1 == ndice(prevkept) && prevkept == toroll {
+			// After keeping two dice, re-rolling the third. Allowed only if kept
+			// dice match (eg, going for triples)
 			if !allkeptsame(dt.Rolls[1]) {
 				return fmt.Errorf("Can only reroll the single die on roll 3 if going for triples")
 			}
