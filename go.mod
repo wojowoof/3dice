@@ -11,8 +11,8 @@ replace (
 require wojones.com/src/dicegame v0.0.0-00010101000000-000000000000
 
 require (
+	golang.org/x/exp v0.0.0-20220602145555-4a0574d9293f
 	wojones.com/src/dicescore v0.0.0-00010101000000-000000000000
-	wojones.com/src/diceturn v0.0.0-00010101000000-000000000000
 )
 
-require golang.org/x/exp v0.0.0-20220602145555-4a0574d9293f // indirect
+require wojones.com/src/diceturn v0.0.0-00010101000000-000000000000 // indirect

@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"os"
+	//"sort"
 	"strconv"
 	"strings"
 	"wojones.com/src/dicegame"
@@ -12,8 +14,72 @@ import (
 	//"wojones.com/src/diceturn"
 )
 
+type dispfunc func(*dicegame.DiceGame, []string) (int, error)
+
+type cmd struct {
+	command string
+	disp    func(*dicegame.DiceGame, []string) (int, error)
+	usestr  string
+}
+
+var cmdz = [...]cmd{
+	{"help", helpme, "get help"},
+	{"exit", quitme, "quit the command loop"},
+	{"status", givestatus, "show current game status"},
+}
+
+func printcmds() {
+	for _, cp := range cmdz {
+		fmt.Printf("%s - %s\n", cp.command, cp.usestr)
+	}
+}
+
+func givestatus(dg *dicegame.DiceGame, argv []string) (int, error) {
+	fmt.Printf("Game: %v\n", *dg)
+	fmt.Printf("Turn: %s\n", dg.CurTurn())
+	return 1, nil
+}
+
+func quitme(dg *dicegame.DiceGame, argv []string) (int, error) {
+	fmt.Println("Adios!")
+	return 0, nil
+}
+
+func helpme(dg *dicegame.DiceGame, argv []string) (int, error) {
+	fmt.Println("Well, please, help yourself!")
+	printcmds()
+	/*
+		for _, cp := range cmdz {
+			fmt.Printf("%s\n", cp.command)
+			//fmt.Printf("%s: %s", cp.command, cp.usestr)
+		}
+	*/
+	return 1, nil
+}
+
+func givescore(dg *dicegame.DiceGame, argv []string) (int, error) {
+	fmt.Printf("Scorecard:\n%s", dg.Scorecard())
+	return 1, nil
+}
+
+func rollcheck(dg *dicegame.DiceGame, argv []string) (int, error) {
+	if len(argv) < 2 {
+		return 1, fmt.Errorf("%s: must specify roll bitmap", argv[0])
+	}
+	return 1, nil
+}
+
 func dispatch(dg *dicegame.DiceGame, argv []string) (int, error) {
-	if 0 == strings.Compare("help", argv[0]) {
+
+	if c := slices.IndexFunc(cmdz, func(c cmd) bool { return c.command == argv[0] }); c < 0 {
+		return 1, fmt.Errorf("Unknown command: \"%v\"", argv[0])
+	} else {
+
+		ret, err := cmdz[c].disp(dg, argv)
+		return ret, err
+	}
+
+	if /*0 == strings.Compare("help", argv[0]) {
 		fmt.Println("Well, help yerself!")
 	} else if 0 == strings.Compare("exit", argv[0]) {
 		fmt.Println("Latah!")
@@ -23,7 +89,7 @@ func dispatch(dg *dicegame.DiceGame, argv []string) (int, error) {
 		fmt.Printf("Turn: %s\n", dg.CurTurn())
 	} else if 0 == strings.Compare("score", argv[0]) {
 		fmt.Printf("Scorecard:\n%s", dg.Scorecard())
-	} else if 0 == strings.Compare("rollcheck", argv[0]) {
+	} else if */0 == strings.Compare("rollcheck", argv[0]) {
 		if len(argv) < 2 {
 			return 1, fmt.Errorf("ERROR: Must specify roll bitmap")
 		} else if len(argv) > 2 {
@@ -91,6 +157,11 @@ func interact(dg *dicegame.DiceGame) {
 func main() {
 	fmt.Printf("Talking shit?\n")
 
+	// TODO: would this be better in an init function? Or maybe the whole struct
+	// command stuff should be broken into its own library ...
+	/*sort.Slice(cmdz, func(i int, j int) bool {
+		return cmdz[i].command < cmdz[j].command
+	})*/
 	cv := dicescore.NewChevron()
 	fmt.Printf("Chevron: %v\n", cv)
 
