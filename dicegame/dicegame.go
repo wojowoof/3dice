@@ -122,7 +122,7 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 		toroll |= diceturn.Die2
 	}
 
-	fmt.Printf("Rolled dice: %03b\n", toroll)
+	fmt.Printf("Asking to roll: %03b\n", toroll)
 
 	var prevroll *diceturn.DiceRoll = nil
 

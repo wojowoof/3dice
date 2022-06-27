@@ -19,19 +19,85 @@ type dispfunc func(*dicegame.DiceGame, []string) (int, error)
 type cmd struct {
 	command string
 	disp    func(*dicegame.DiceGame, []string) (int, error)
+	argstr  string
 	usestr  string
 }
 
-var cmdz = [...]cmd{
-	{"help", helpme, "get help"},
-	{"exit", quitme, "quit the command loop"},
-	{"status", givestatus, "show current game status"},
+var cmdz = []cmd{
+	{"help", helpme, "", "get help"},
+	{"exit", quitme, "", "quit the command loop"},
+	{"status", givestatus, "", "show current game status"},
+	{"score", showscore, "", "show the scorecard"},
+	{"rollcheck", rollcheck, "<rollbits>", "check validity of a roll"},
+	{"roll", rolldice, "<d0> <d1> <d2>", "roll with given values (0 is a keep)"},
+	{"passto", passto, "<player>", "end turn and pass dice to specified player"},
 }
 
-func printcmds() {
-	for _, cp := range cmdz {
-		fmt.Printf("%s - %s\n", cp.command, cp.usestr)
+type cmdhelp struct {
+	command string
+	usage   string
+	argstr  string
+}
+
+var cmddoc = []cmdhelp{}
+
+func passto(dg *dicegame.DiceGame, argv []string) (int, error) {
+	if len(argv) < 2 {
+		return 1, fmt.Errorf("Must specify a player")
 	}
+	ret := dg.PassDice(argv[1])
+	if 0 != ret {
+		return 1, fmt.Errorf("FAIL! (%d)\n", ret)
+	}
+	return 1, nil
+}
+
+func rolldice(dg *dicegame.DiceGame, argv []string) (int, error) {
+	if len(argv) < 2 {
+		return 1, fmt.Errorf("ERROR: must specify dice values")
+	}
+	dice := []int{0, 0, 0}
+	for i := 1; i < len(argv); i++ {
+		if argv[i] == "-" {
+			dice[i-1] = 0
+		} else if dval, err := strconv.Atoi(argv[i]); err != nil {
+			fmt.Printf("Error converting %s: %v\n", argv[i], err)
+			return 1, fmt.Errorf("Invalid integer value %s", argv[i])
+		} else if dval > 6 || dval < 0 {
+			fmt.Printf("Invalid dice value \"%s\"\n", argv[i])
+			return 1, fmt.Errorf("Invalid value for a die: %s", argv[i])
+		} else {
+			dice[i-1] = dval
+		}
+	}
+
+	fmt.Printf("Rolling %d/%d/%d\n", dice[0], dice[1], dice[2])
+	if err := dg.RollWith(dice[0], dice[1], dice[2]); err != nil {
+		fmt.Printf("Whoops - %v\n", err)
+	}
+
+	return 1, nil
+}
+
+func rollcheck(dg *dicegame.DiceGame, argv []string) (int, error) {
+	if len(argv) < 2 {
+		return 1, fmt.Errorf("ERROR: Must specify roll bitmap")
+	} else if len(argv) > 2 {
+		return 1, fmt.Errorf("ERROR: usage: rollcheck <dicebits>")
+	}
+	if dmap, err := strconv.ParseInt(argv[1], 0, 32); err != nil {
+		return 1, fmt.Errorf("ERROR: Invalid dicemap specification: %s", argv[1])
+	} else if e := dg.RollCheck(int(dmap)); e != nil {
+		fmt.Printf("Cannot roll 0x%03b: %v\n", dmap, e)
+	} else {
+		fmt.Printf("Sure, roll 0x%03b!!!\n", dmap)
+	}
+	return 1, nil
+}
+
+func showscore(dg *dicegame.DiceGame, argv []string) (int, error) {
+	fmt.Printf("Scorecard:\n%s", dg.Scorecard())
+	return 1, nil
 }
 
 func givestatus(dg *dicegame.DiceGame, argv []string) (int, error) {
@@ -47,13 +113,13 @@ func quitme(dg *dicegame.DiceGame, argv []string) (int, error) {
 
 func helpme(dg *dicegame.DiceGame, argv []string) (int, error) {
 	fmt.Println("Well, please, help yourself!")
-	printcmds()
-	/*
-		for _, cp := range cmdz {
-			fmt.Printf("%s\n", cp.command)
-			//fmt.Printf("%s: %s", cp.command, cp.usestr)
+	for _, cp := range cmddoc {
+		fmt.Printf("%s ", cp.command)
+		if len(cp.argstr) > 0 {
+			fmt.Printf("%s ", cp.argstr)
 		}
-	*/
+		fmt.Printf("- %s\n", cp.usage)
+	}
 	return 1, nil
 }
 
@@ -62,79 +128,14 @@ func givescore(dg *dicegame.DiceGame, argv []string) (int, error) {
 	return 1, nil
 }
 
-func rollcheck(dg *dicegame.DiceGame, argv []string) (int, error) {
-	if len(argv) < 2 {
-		return 1, fmt.Errorf("%s: must specify roll bitmap", argv[0])
-	}
-	return 1, nil
-}
-
 func dispatch(dg *dicegame.DiceGame, argv []string) (int, error) {
 
 	if c := slices.IndexFunc(cmdz, func(c cmd) bool { return c.command == argv[0] }); c < 0 {
 		return 1, fmt.Errorf("Unknown command: \"%v\"", argv[0])
 	} else {
-
 		ret, err := cmdz[c].disp(dg, argv)
 		return ret, err
 	}
-
-	if /*0 == strings.Compare("help", argv[0]) {
-		fmt.Println("Well, help yerself!")
-	} else if 0 == strings.Compare("exit", argv[0]) {
-		fmt.Println("Latah!")
-		return 0, nil
-	} else if 0 == strings.Compare("status", argv[0]) {
-		fmt.Printf("Game: %v\n", *dg)
-		fmt.Printf("Turn: %s\n", dg.CurTurn())
-	} else if 0 == strings.Compare("score", argv[0]) {
-		fmt.Printf("Scorecard:\n%s", dg.Scorecard())
-	} else if */0 == strings.Compare("rollcheck", argv[0]) {
-		if len(argv) < 2 {
-			return 1, fmt.Errorf("ERROR: Must specify roll bitmap")
-		} else if len(argv) > 2 {
-			return 1, fmt.Errorf("ERROR: usage: rollcheck <dicebits>")
-		}
-		if dmap, err := strconv.ParseInt(argv[1], 0, 32); err != nil {
-			return 1, fmt.Errorf("ERROR: Invalid dicemap specification: %s", argv[1])
-		} else if e := dg.RollCheck(int(dmap)); e != nil {
-			fmt.Printf("Cannot roll 0x%03b: %v\n", dmap, e)
-		} else {
-			fmt.Printf("Sure, roll 0x%03b!!!\n", dmap)
-		}
-	} else if 0 == strings.Compare("roll", argv[0]) {
-		if len(argv) < 2 {
-			fmt.Printf("ERROR: must specify dice values")
-		}
-		dice := []int{0, 0, 0}
-		for i := 1; i < len(argv); i++ {
-			if dval, err := strconv.Atoi(argv[i]); err != nil {
-				fmt.Printf("Error converting %s: %v\n", argv[i], err)
-				return 1, fmt.Errorf("Invalid integer value %s", argv[i])
-			} else if dval > 6 || dval < 0 {
-				fmt.Printf("Invalid dice value \"%s\"\n", argv[i])
-				return 1, fmt.Errorf("Invalid value for a die: %s", argv[i])
-			} else {
-				dice[i-1] = dval
-			}
-		}
-
-		fmt.Printf("Rolling %d/%d/%d\n", dice[0], dice[1], dice[2])
-		if err := dg.RollWith(dice[0], dice[1], dice[2]); err != nil {
-			fmt.Printf("Whoops - %v\n", err)
-		}
-	} else if 0 == strings.Compare("passto", argv[0]) {
-		if len(argv) < 2 {
-			fmt.Println("ERROR: usage: passto <player>")
-		}
-		ret := dg.PassDice(argv[1])
-		if 0 != ret {
-			fmt.Printf("FAIL! (%d)\n", ret)
-		}
-	} else {
-		fmt.Printf("Huh? Wassa '%s' mean?\n", argv[0])
-	}
-	return 1, nil
 }
 
 func interact(dg *dicegame.DiceGame) {
@@ -159,6 +160,9 @@ func interact(dg *dicegame.DiceGame) {
 func main() {
 	fmt.Printf("Talking shit?\n")
 
+	for _, c := range cmdz {
+		cmddoc = append(cmddoc, cmdhelp{c.command, c.argstr, c.usestr})
+	}
 	// TODO: would this be better in an init function? Or maybe the whole struct
 	// command stuff should be broken into its own library ...
 	/*sort.Slice(cmdz, func(i int, j int) bool {
