@@ -82,6 +82,7 @@ func TestRollCheck(t *testing.T) {
 	dt.Rolls = append(dt.Rolls, DiceRoll{Rolled: AllDice, Kept: Die0})
 	dt.NumRolls++
 
+	// Checks of SECOND roll
 	if e := dt.RollCheck(AllDice); e == nil {
 		t.Errorf("Improperly allowed roll of all dice on second roll")
 	} else {
@@ -96,7 +97,7 @@ func TestRollCheck(t *testing.T) {
 		}
 	}
 
-	// Last roll - the tough one
+	// THIRD roll - the tough one
 	// * Typical: held 1 die on roll 1, will hold one from roll 2
 	dt.Rolls[0].Kept = Die0
 	dt.Rolls[0].RollResults = [3]int{1, 2, 4}
@@ -104,7 +105,7 @@ func TestRollCheck(t *testing.T) {
 	dt.Rolls = append(dt.Rolls, DiceRoll{Rolled: Die1 | Die2, Kept: Die1})
 	dt.NumRolls = 2
 
-	// Now: check to see what can be Rolled - should just be Die3
+	// Now: check to see what can be Rolled - should just be third die
 	echeck(t, func() error { return dt.RollCheck(Die2) },
 		"rolling a single unrolled die on turn 3", false)
 

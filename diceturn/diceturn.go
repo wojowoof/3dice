@@ -2,6 +2,7 @@ package diceturn
 
 import (
 	"fmt"
+	"sort"
 )
 
 // DieID - Identify die by bits in an int: 00000001b is die 0, 00000010 is die 1
@@ -32,7 +33,7 @@ const (
 //     other words, it's only valid *after* the *next* roll; it CANNOT be used
 //     to validate which dice to roll on the next roll. ALSO: It's an open
 //		 question for the second roll if it's all the dice kept in roll 1 and 2
-//		 or just those kept from those rolled in roll 2. If the latter, than Kept
+//		 or just those kept from those rolled in roll 2. If the latter, then Kept
 //		 will aways be a subset of Rolled.
 type DiceRoll struct {
 	Rolled      int    // bitmap: xxxxx111 = all, xxxxx001 is color die, etc.
@@ -90,7 +91,7 @@ func (dt DiceTurn) String() string {
 	return s
 }
 
-// This is a screwy idea; really, the player *can* roll any dice in all but the
+// CanRoll - This is a screwy idea; really, the player *can* roll any dice in all but the
 // last roll, based on what they kept previously, but rarely can they roll *all*
 // the dice they *could* roll. So is this function actually useful?
 //
@@ -164,9 +165,11 @@ func (dt DiceTurn) RollCheck(toroll int) error {
 		if toroll == AllDice {
 			return fmt.Errorf("Must keep at least one die on the second roll")
 		}
+		//prevkept := dt.Rolls[0].Kept
+		// if 0 != toroll
 	case 2:
 		prevkept := dt.Rolls[1].Kept
-		// If two dice were kept on the previous roll, then you can roll again only if
+		// If only two dice were kept on the previous roll, then you can roll again only if
 		// you are going for triples
 		fmt.Printf("Roll %v: previously kept 0b%03b\n", 1+dt.NumRolls, prevkept)
 		if 1 == ndice(prevkept) && prevkept == toroll {
@@ -181,6 +184,38 @@ func (dt DiceTurn) RollCheck(toroll int) error {
 		}
 	}
 	return nil
+}
+
+func (dr DiceRoll) IsConsec() bool {
+	dsort := dr.RollResults
+	sort.Slice(dsort, func(i, j int) bool { return dsort[i] < dsort[j] })
+	if dsort[2] == dsort[1]+1 && dsort[1] == dsort[0]+1 {
+		return true
+	}
+	return false
+}
+
+// ConsecsScore - return any consecutivds points UP TO the specified roll
+func (d DiceTurn) ConsecScore(roll int) (int, error) {
+	if roll > d.NumRolls {
+		return 0, fmt.Errorf("ERROR: requested roll %d > number of rolls %d",
+			roll, d.NumRolls)
+	}
+	cscore := 0
+	if d.Rolls[roll].IsConsec() {
+		cscore = 2
+	}
+
+	if roll > 0 {
+		if pc, e := d.ConsecScore(roll - 1); e != nil {
+			return 0, e
+		} else {
+			cscore = cscore << 2
+			cscore += pc
+		}
+	}
+
+	return cscore, nil
 }
 
 func (d DiceTurn) TurnRoll(rolled int, d1 int, d2 int, d3 int) int {
