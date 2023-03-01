@@ -92,30 +92,32 @@ func TestRollCheck(t *testing.T) {
 	for _, d := range []DieID{Die0 | Die1, Die1 | Die2, Die0, Die1, Die2} {
 		echeck(t, func() error { return dt.RollCheck(int(d)) },
 			fmt.Sprintf("roll of 0x%03b on second roll", d), false)
-		if e := dt.RollCheck(int(d)); e != nil {
-			t.Errorf("roll of 0x%03b on second roll (%v)\n", d, e)
-		}
+		//if e := dt.RollCheck(int(d)); e != nil {
+		//	t.Errorf("roll of 0x%03b on second roll (%v)\n", d, e)
+		//}
 	}
 
 	// THIRD roll - the tough one
 	// * Typical: held 1 die on roll 1, will hold one from roll 2
 	dt.Rolls[0].Kept = Die0
+	dt.Rolls[0].Rolled = AllDice
 	dt.Rolls[0].RollResults = [3]int{1, 2, 4}
 
-	dt.Rolls = append(dt.Rolls, DiceRoll{Rolled: Die1 | Die2, Kept: Die1})
+	dt.Rolls = append(dt.Rolls, DiceRoll{Rolled: Die1 | Die2, Kept: 0,
+		RollResults: [3]int{0, 2, 5}})
 	dt.NumRolls = 2
 
 	// Now: check to see what can be Rolled - should just be third die
 	echeck(t, func() error { return dt.RollCheck(Die2) },
 		"rolling a single unrolled die on turn 3", false)
 
-	// Disallow previously rolled die, individually and together
+	// Disallow previously kept die, individually and together
 	for _, d := range []DieID{Die0, Die1} {
 		echeck(t, func() error { return dt.RollCheck(int(d)) },
-			fmt.Sprintf("rerolling a previously kept die (%s) on roll 2", diename[d]), true)
+			fmt.Sprintf("rerolling a previously kept die (%s) on roll 3", diename[d]), true)
 	}
 	echeck(t, func() error { return dt.RollCheck(int(Die0 | Die1)) },
-		fmt.Sprintf("rerolling both previously kept dice on roll 2"), true)
+		fmt.Sprintf("rerolling both previously kept dice on roll 3"), true)
 
 	// Never actually happens: genius kept two non-matching dice after turn 1, wants
 	// to reroll third die on turn3

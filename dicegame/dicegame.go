@@ -122,6 +122,9 @@ func (dg *DiceGame) RollWith(d1 int, d2 int, d3 int) error {
 		toroll |= diceturn.Die2
 	}
 
+	if toroll == 0 {
+		return fmt.Errorf("Rolling no dice is not a roll")
+	}
 	fmt.Printf("Asking to roll: %03b\n", toroll)
 
 	var prevroll *diceturn.DiceRoll = nil
@@ -196,6 +199,8 @@ func (dg *DiceGame) PassDice(player string) int {
 	}
 
 	// TODO: Cleanup the last turn, assign score, etc
+	ct := dg.Turns[len(dg.Turns)-1]
+	ct.CloseTurn()
 
 	dg.PrevPlayer = dg.CurPlayer
 	dg.PrevTurn = &dg.Turns[len(dg.Turns)-1]

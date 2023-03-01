@@ -11,6 +11,7 @@ import (
 	"strings"
 	"wojones.com/src/dicegame"
 	"wojones.com/src/dicescore"
+	"wojones.com/src/diceturn"
 	//"wojones.com/src/diceturn"
 )
 
@@ -28,6 +29,7 @@ var cmdz = []cmd{
 	{"exit", quitme, "", "quit the command loop"},
 	{"status", givestatus, "", "show current game status"},
 	{"score", showscore, "", "show the scorecard"},
+	{"history", showhist, "", "Display the game history"},
 	{"rollcheck", rollcheck, "<rollbits>", "check validity of a roll"},
 	{"roll", rolldice, "<d0> <d1> <d2>", "roll with given values (0 is a keep)"},
 	{"passto", passto, "<player>", "end turn and pass dice to specified player"},
@@ -40,6 +42,18 @@ type cmdhelp struct {
 }
 
 var cmddoc = []cmdhelp{}
+
+func showhist(dg *dicegame.DiceGame, argv []string) (int, error) {
+	fmt.Printf("History of game: %s (%d turns)\n", dg.ID, len(dg.Turns))
+	for turnno := 0; turnno < len(dg.Turns)-1; turnno++ {
+		ct := dg.Turns[turnno]
+		fmt.Printf("%s rolled a %d ()\n", ct.Player, ct.Score)
+	}
+	// Show the current (last) turns
+	ct := dg.Turns[len(dg.Turns)-1]
+	fmt.Printf("Current: %s\n", ct.String())
+	return 1, nil
+}
 
 func passto(dg *dicegame.DiceGame, argv []string) (int, error) {
 	if len(argv) < 2 {
@@ -74,6 +88,26 @@ func rolldice(dg *dicegame.DiceGame, argv []string) (int, error) {
 	fmt.Printf("Rolling %d/%d/%d\n", dice[0], dice[1], dice[2])
 	if err := dg.RollWith(dice[0], dice[1], dice[2]); err != nil {
 		fmt.Printf("Whoops - %v\n", err)
+	} else {
+		dt := dg.Turns[len(dg.Turns)-1]
+		cr := dt.Rolls[dt.NumRolls-1]
+		rv, special := cr.TurnValue()
+
+		if cr.IsConsec() {
+			fmt.Printf("CONSECUTIVES!")
+		}
+		if rv >= 0 || diceturn.NothingSpecial != special {
+			fmt.Printf("That's a %s\n", cr.TurnValueString())
+
+		} else {
+			fmt.Printf("Whoops - value %d?\n", rv)
+		}
+	}
+
+	// TODO: Advance turn if this is third rolls
+	ct := dg.Turns[len(dg.Turns)-1]
+	if ct.NumRolls > 2 {
+		fmt.Printf("Turn over!\n")
 	}
 
 	return 1, nil

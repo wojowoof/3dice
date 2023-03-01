@@ -21,6 +21,9 @@ const (
 var diename = map[DieID]string{
 	Die0: "Die0", Die1: "Die1", Die2: "Die2",
 }
+var dieindex = map[DieID]int{
+	Die0: 0, Die1: 1, Die2: 2,
+}
 
 // Special values: a 6 == 0, and triple-5 is the better 0
 const (
@@ -30,37 +33,141 @@ const (
 
 // DiceRoll - describes a roll of the dice.
 // NOTE THAT: operationally, the Kept field is determined on the NEXT ROLL; in
-//     other words, it's only valid *after* the *next* roll; it CANNOT be used
-//     to validate which dice to roll on the next roll. ALSO: It's an open
-//		 question for the second roll if it's all the dice kept in roll 1 and 2
-//		 or just those kept from those rolled in roll 2. If the latter, then Kept
-//		 will aways be a subset of Rolled.
+//
+//	    other words, it's only valid *after* the *next* roll; it CANNOT be used
+//	    to validate which dice to roll on the next roll. ALSO: It's an open
+//			 question for the second roll if it's all the dice kept in roll 1 and 2
+//			 or just those kept from those rolled in roll 2. If the latter, then Kept
+//			 will aways be a subset of Rolled.
 type DiceRoll struct {
 	Rolled      int    // bitmap: xxxxx111 = all, xxxxx001 is color die, etc.
 	RollResults [3]int // New values are those indicated by Rolled; if bit not set, then value comes from prior roll
 	OffTable    int    // bitmap: dice that left the table
 	Kept        int    // bitmap: dice kept after the roll
-	Consecs     bool   // Calculated by RollResults array ()
+	Consecs     bool   // Calculated from RollResults array ()
 }
 
 // NOTE TO SELF: Need to track the colored die; I guess it can always be die0.
+type RollValueSpecial int
+
+const (
+	NothingSpecial RollValueSpecial = 0
+	RollTripleSix                   = 666
+	RollTripleFive                  = 555
+	RollTriple                      = 111
+)
 
 type DiceTurn struct {
-	Player   string
-	DiceVals [3]int
-	Score    int
-	NumRolls int
-	Rolls    []DiceRoll
+	Player       string
+	DiceVals     [3]int
+	Score        int
+	ScoreSpecial RollValueSpecial
+	NumRolls     int
+	Rolls        []DiceRoll
 }
 
 func NewTurn(name string) DiceTurn {
-	dt := DiceTurn{Player: name, NumRolls: 0, Score: 0}
+	dt := DiceTurn{Player: name, NumRolls: 0, Score: 0, ScoreSpecial: NothingSpecial}
 	return dt
 }
 
+func (dr DiceRoll) TurnValue() (int, RollValueSpecial) {
+	special := NothingSpecial
+	score := 0
+
+	if 6 == dr.RollResults[0] && 6 == dr.RollResults[1] && 6 == dr.RollResults[2] {
+		score = 0
+		special = RollTripleSix
+	} else if 5 == dr.RollResults[0] && 5 == dr.RollResults[1] && 5 == dr.RollResults[2] {
+		score = 0
+		special = RollTripleFive
+	} else if dr.RollResults[0] == dr.RollResults[1] && dr.RollResults[1] == dr.RollResults[2] {
+		score = dr.RollResults[0]
+		special = RollTriple
+	} else {
+		score = 0
+		for i := 0; i < 3; i++ {
+			if 6 != dr.RollResults[i] {
+				score += dr.RollResults[i]
+			}
+		}
+		if score <= 0 {
+			return -1, 0
+		}
+	}
+	return score, special
+}
+
+func (dr DiceRoll) TurnValueString() string {
+	switch score, special := dr.TurnValue(); special {
+	case NothingSpecial:
+		return fmt.Sprintf("%d", score)
+	case RollTriple:
+		return fmt.Sprintf("Triple %d", score)
+	case RollTripleFive:
+		return fmt.Sprintf("Triple-Five")
+	case RollTripleSix:
+		return fmt.Sprintf("Triple-Six")
+	default:
+		break
+	}
+	return fmt.Sprintf("ERROR")
+}
+
 func (dt DiceTurn) RollString() string {
-	s := fmt.Sprintf("%s: [%d][%d][%d]", dt.Player, dt.DiceVals[0], dt.DiceVals[1], dt.DiceVals[2])
+	s := fmt.Sprintf("[%d][%d][%d]", dt.DiceVals[0], dt.DiceVals[1], dt.DiceVals[2])
 	return s
+}
+
+// TurnValue - the sum of the dice of the last roll in the turn. Note that This
+// is the 'raw' score, not the value that should be added to the player's
+// score! This is the value to compare to the TurnValue of the prior player's
+// turn (or 14, if this was the first turn)
+//
+// Also note: this does NOT track consecutives, OR "off the table" rolls; those
+// are added to the player's tally immediately when they happen.
+func (dt DiceTurn) TurnValue() int {
+	if len(dt.Rolls) < 1 {
+		return -1
+	}
+
+	if 6 == dt.DiceVals[0] && 6 == dt.DiceVals[1] && 6 == dt.DiceVals[2] {
+		dt.Score = 0
+		dt.ScoreSpecial = RollTripleSix
+	} else if 5 == dt.DiceVals[0] && 5 == dt.DiceVals[1] && 5 == dt.DiceVals[2] {
+		dt.Score = 0
+		dt.ScoreSpecial = RollTripleFive
+	} else if dt.DiceVals[0] == dt.DiceVals[1] && dt.DiceVals[1] == dt.DiceVals[2] {
+		dt.Score = dt.DiceVals[0]
+		dt.ScoreSpecial = RollTriple
+	} else {
+		dt.Score = 0
+		for i := 0; i < 3; i++ {
+			if 6 != dt.DiceVals[0] {
+				dt.Score += dt.DiceVals[0]
+			}
+		}
+		// ASSERT: dt.Score > 0
+	}
+
+	//lroll := dt.Rolls[len(dt.Rolls)-1]
+	return 0
+}
+
+// CloseTurn - sum up the score for the turn
+func (dt DiceTurn) CloseTurn() int {
+	if dt.NumRolls < 1 {
+		return -1
+	}
+
+	dt.DiceVals[0] = dt.Rolls[dt.NumRolls-1].RollResults[0]
+	dt.DiceVals[1] = dt.Rolls[dt.NumRolls-1].RollResults[1]
+	dt.DiceVals[2] = dt.Rolls[dt.NumRolls-1].RollResults[2]
+
+	if dt.TurnValue() < 0 {
+		return -1
+	}
+	return 0
 }
 
 func (dt DiceTurn) String() string {
@@ -131,6 +238,7 @@ func allkept(dr DiceRoll, dval int) bool {
 	return true
 }
 
+// allkeptsame - Check that all dice kept in a turn had the same value
 func allkeptsame(dr DiceRoll) bool {
 	kval := int(0)
 	if 0 != dr.Kept&Die0 {
@@ -140,7 +248,7 @@ func allkeptsame(dr DiceRoll) bool {
 	} else if 0 != dr.Kept&Die2 {
 		kval = dr.RollResults[2]
 	} else {
-		fmt.Printf("Invalid state for roll %v (none kept)", dr)
+		fmt.Printf("Invalid state for roll %v (none kept?)", dr)
 		return false
 	}
 
@@ -168,18 +276,41 @@ func (dt DiceTurn) RollCheck(toroll int) error {
 		//prevkept := dt.Rolls[0].Kept
 		// if 0 != toroll
 	case 2:
-		prevkept := dt.Rolls[1].Kept
-		// If only two dice were kept on the previous roll, then you can roll again only if
+		firstkept := dt.Rolls[0].Kept
+		// If two dice were kept on the previous roll, then you can roll again only if
 		// you are going for triples
-		fmt.Printf("Roll %v: previously kept 0b%03b\n", 1+dt.NumRolls, prevkept)
-		if 1 == ndice(prevkept) && prevkept == toroll {
+		fmt.Printf("Roll %v: kept 0b%03b on roll 1\n", 1+dt.NumRolls, firstkept)
+		// Were two dice were kept in the first roll?
+		if 2 == ndice(firstkept) {
+			fmt.Printf("Kept two dice on roll 1\n")
+			if firstkept == toroll {
+				fmt.Printf("Rerolling previously kept two dice\n")
+				// Special case: can only reroll both kept dice IF you are now going for triple
+				// RULE CHECK: only for triple-fives?
+				rolling := DieID(^toroll & AllDice)
+				if dt.Rolls[1].RollResults[dieindex[rolling]] != 5 {
+					return fmt.Errorf("Can only reroll two previously kept if going for triple-fives")
+				}
+			} else if 0 == toroll&firstkept {
+				// Rerolling the same single die as in second roll. Only allowed if
+				// going for triples
+				if !allkeptsame(dt.Rolls[0]) {
+					return fmt.Errorf("Can only roll same single die (0b%03b) twice if going for triples", toroll)
+				}
+			} else {
+				// Rerolling one of the prior kept two; not allowed
+				return fmt.Errorf("Cannot reroll only one of previously kept two die (0b%03b)",
+					toroll&firstkept)
+			}
+		} else {
+			// One die was kept on first roll.
 			// After keeping two dice, re-rolling the third. Allowed only if kept
 			// dice match (eg, going for triples)
-			if !allkeptsame(dt.Rolls[1]) {
-				return fmt.Errorf("Can only reroll the single die on roll 3 if going for triples")
+			if !allkeptsame(dt.Rolls[0]) {
+				return fmt.Errorf("Code TBD")
 			}
 		}
-		if 0 != prevkept&toroll {
+		if 0 != firstkept&toroll {
 			//
 		}
 	}
