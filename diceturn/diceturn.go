@@ -114,7 +114,7 @@ func (dr DiceRoll) TurnValueString() string {
 	return fmt.Sprintf("ERROR")
 }
 
-func (dt DiceTurn) RollString() string {
+func (dt *DiceTurn) RollString() string {
 	s := fmt.Sprintf("[%d][%d][%d]", dt.DiceVals[0], dt.DiceVals[1], dt.DiceVals[2])
 	return s
 }
@@ -126,7 +126,8 @@ func (dt DiceTurn) RollString() string {
 //
 // Also note: this does NOT track consecutives, OR "off the table" rolls; those
 // are added to the player's tally immediately when they happen.
-func (dt DiceTurn) TurnValue() int {
+/* func (dt DiceTurn) TurnValue() int {
+	tval := 0
 	if len(dt.Rolls) < 1 {
 		return -1
 	}
@@ -144,18 +145,18 @@ func (dt DiceTurn) TurnValue() int {
 		dt.Score = 0
 		for i := 0; i < 3; i++ {
 			if 6 != dt.DiceVals[0] {
-				dt.Score += dt.DiceVals[0]
+				tval += dt.DiceVals[0]
 			}
 		}
 		// ASSERT: dt.Score > 0
 	}
 
 	//lroll := dt.Rolls[len(dt.Rolls)-1]
-	return 0
-}
+	return tval
+} */
 
 // CloseTurn - sum up the score for the turn
-func (dt DiceTurn) CloseTurn() int {
+func (dt *DiceTurn) CloseTurn() int {
 	if dt.NumRolls < 1 {
 		return -1
 	}
@@ -164,9 +165,10 @@ func (dt DiceTurn) CloseTurn() int {
 	dt.DiceVals[1] = dt.Rolls[dt.NumRolls-1].RollResults[1]
 	dt.DiceVals[2] = dt.Rolls[dt.NumRolls-1].RollResults[2]
 
-	if dt.TurnValue() < 0 {
+	if dt.Score, dt.ScoreSpecial = dt.Rolls[dt.NumRolls-1].TurnValue(); dt.Score < 0 {
 		return -1
 	}
+	fmt.Printf("CloseTurn: %s %s %d\n", dt.Player, dt.RollString(), dt.Score)
 	return 0
 }
 
@@ -318,8 +320,9 @@ func (dt DiceTurn) RollCheck(toroll int) error {
 }
 
 func (dr DiceRoll) IsConsec() bool {
-	dsort := dr.RollResults
-	sort.Slice(dsort, func(i, j int) bool { return dsort[i] < dsort[j] })
+	dsort := dr.RollResults[0:]
+	//sort.Slice(dsort, func(i, j int) bool { return dsort[i] < dsort[j] })
+	sort.Ints(dsort)
 	if dsort[2] == dsort[1]+1 && dsort[1] == dsort[0]+1 {
 		return true
 	}
@@ -332,16 +335,18 @@ func (d DiceTurn) ConsecScore(roll int) (int, error) {
 		return 0, fmt.Errorf("ERROR: requested roll %d > number of rolls %d",
 			roll, d.NumRolls)
 	}
+
+	roll -= 1
 	cscore := 0
 	if d.Rolls[roll].IsConsec() {
 		cscore = 2
 	}
 
 	if roll > 0 {
-		if pc, e := d.ConsecScore(roll - 1); e != nil {
+		if pc, e := d.ConsecScore(roll); e != nil {
 			return 0, e
 		} else {
-			cscore = cscore << 2
+			// cscore = cscore << 2
 			cscore += pc
 		}
 	}

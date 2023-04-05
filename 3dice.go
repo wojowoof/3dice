@@ -4,18 +4,24 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
+	"time"
+
+	"golang.org/x/exp/slices"
+
 	//"sort"
 	"strconv"
 	"strings"
+
+	// "github.com/flosch/pongo2"
+
 	"wojones.com/src/dicegame"
 	"wojones.com/src/dicescore"
 	"wojones.com/src/diceturn"
 	//"wojones.com/src/diceturn"
 )
 
-type dispfunc func(*dicegame.DiceGame, []string) (int, error)
+// type dispfunc func(*dicegame.DiceGame, []string) (int, error)
 
 type cmd struct {
 	command string
@@ -43,6 +49,14 @@ type cmdhelp struct {
 
 var cmddoc = []cmdhelp{}
 
+var tdg = dicegame.NewGame("Game001", "Freddy", "Danny", "Smeck")
+var starttime = time.Now()
+
+func joinem(argv []string) string {
+	fmt.Printf("joinem\n")
+	return strings.Join(argv, ", ")
+}
+
 func showhist(dg *dicegame.DiceGame, argv []string) (int, error) {
 	fmt.Printf("History of game: %s (%d turns)\n", dg.ID, len(dg.Turns))
 	for turnno := 0; turnno < len(dg.Turns)-1; turnno++ {
@@ -57,11 +71,11 @@ func showhist(dg *dicegame.DiceGame, argv []string) (int, error) {
 
 func passto(dg *dicegame.DiceGame, argv []string) (int, error) {
 	if len(argv) < 2 {
-		return 1, fmt.Errorf("Must specify a player")
+		return 1, fmt.Errorf("must specify a player")
 	}
 	ret := dg.PassDice(argv[1])
 	if 0 != ret {
-		return 1, fmt.Errorf("FAIL! (%d)\n", ret)
+		return 1, fmt.Errorf("FAIL! (%d)", ret)
 	}
 	return 1, nil
 }
@@ -76,10 +90,10 @@ func rolldice(dg *dicegame.DiceGame, argv []string) (int, error) {
 			dice[i-1] = 0
 		} else if dval, err := strconv.Atoi(argv[i]); err != nil {
 			fmt.Printf("Error converting %s: %v\n", argv[i], err)
-			return 1, fmt.Errorf("Invalid integer value %s", argv[i])
+			return 1, fmt.Errorf("invalid integer value %s", argv[i])
 		} else if dval > 6 || dval < 0 {
 			fmt.Printf("Invalid dice value \"%s\"\n", argv[i])
-			return 1, fmt.Errorf("Invalid value for a die: %s", argv[i])
+			return 1, fmt.Errorf("invalid value for a die: %s", argv[i])
 		} else {
 			dice[i-1] = dval
 		}
@@ -93,8 +107,14 @@ func rolldice(dg *dicegame.DiceGame, argv []string) (int, error) {
 		cr := dt.Rolls[dt.NumRolls-1]
 		rv, special := cr.TurnValue()
 
-		if cr.IsConsec() {
-			fmt.Printf("CONSECUTIVES!")
+		if cr.Consecs {
+			cs, err := dt.ConsecScore(dt.NumRolls)
+			if nil != err {
+				fmt.Printf("Error %s calculating consecutive score?\n", err.Error())
+			} else {
+				fmt.Printf("CONSECUTIVES! (%d)\n", cs)
+				// TODO: Add appropriate score
+			}
 		}
 		if rv >= 0 || diceturn.NothingSpecial != special {
 			fmt.Printf("That's a %s\n", cr.TurnValueString())
@@ -157,19 +177,31 @@ func helpme(dg *dicegame.DiceGame, argv []string) (int, error) {
 	return 1, nil
 }
 
-func givescore(dg *dicegame.DiceGame, argv []string) (int, error) {
-	fmt.Printf("Scorecard:\n%s", dg.Scorecard())
-	return 1, nil
-}
-
 func dispatch(dg *dicegame.DiceGame, argv []string) (int, error) {
 
 	if c := slices.IndexFunc(cmdz, func(c cmd) bool { return c.command == argv[0] }); c < 0 {
-		return 1, fmt.Errorf("Unknown command: \"%v\"", argv[0])
+		return 1, fmt.Errorf("unknown command: \"%v\"", argv[0])
 	} else {
 		ret, err := cmdz[c].disp(dg, argv)
 		return ret, err
 	}
+}
+
+func runcmd(dg *dicegame.DiceGame, text string) int {
+	if 0 == len(text) {
+		fmt.Printf("\n")
+		return 0
+	}
+
+	text = strings.TrimSuffix(text, "\n")
+	argv := strings.Fields(text)
+
+	if goon, err := dispatch(dg, argv); err != nil {
+		fmt.Printf("Error with %s: %v\n", argv[0], err)
+	} else if goon == 0 {
+		return -1
+	}
+	return 0
 }
 
 func interact(dg *dicegame.DiceGame) {
@@ -180,12 +212,8 @@ func interact(dg *dicegame.DiceGame) {
 	for {
 		fmt.Print("3d% ")
 		text, _ := reader.ReadString('\n')
-		text = strings.TrimSuffix(text, "\n")
-		argv := strings.Fields(text)
 
-		if goon, err := dispatch(dg, argv); err != nil {
-			fmt.Printf("Error with %s: %v\n", argv[0], err)
-		} else if goon == 0 {
+		if 0 > runcmd(dg, text) {
 			break
 		}
 	}
@@ -197,6 +225,11 @@ func main() {
 	for _, c := range cmdz {
 		cmddoc = append(cmddoc, cmdhelp{c.command, c.argstr, c.usestr})
 	}
+
+	if err := setupRoutes(); err != nil {
+		fmt.Printf("ERROR settup up router: %v\n", err)
+	}
+
 	// TODO: would this be better in an init function? Or maybe the whole struct
 	// command stuff should be broken into its own library ...
 	/*sort.Slice(cmdz, func(i int, j int) bool {
@@ -208,7 +241,7 @@ func main() {
 	// tdg := dicegame.DiceGame{ID: "Game1",
 	// 	Players: []string{"Alpha", "Beta", "Greg"},
 	// }
-	tdg := dicegame.NewGame("Game001", "Freddy", "Danny", "Smeck")
+	//tdg := dicegame.NewGame("Game001", "Freddy", "Danny", "Smeck")
 	fmt.Printf("Game: %v\n", tdg)
 
 	//tdg.Scores["Freddy"].Chevrons[0].Count = 11
@@ -256,6 +289,31 @@ func main() {
 	// tdg.PassDice("Freddy")
 	// fmt.Printf("Turn: %v\n", tdg.Turns[0])
 
-	interact(&tdg)
+	port := os.Getenv("3DICE_PORT")
+	if port == "" {
+		port = "3002"
+	}
+
+	/*
+		mux := http.NewServeMux()
+
+		mux.HandleFunc("/play", searchHandler)
+		mux.HandleFunc("/", indexHandler)
+
+		fs := http.FileServer(http.Dir("static/assets"))
+		mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
+
+		fmt.Printf("About to listen ...\n")
+		http.ListenAndServe(":"+port, mux)
+	*/
+	fmt.Println("About to listen ...")
+	weberr := webListen()
+	fmt.Printf("Listening!\n")
+
+	if nil != weberr {
+		fmt.Printf("ERROR: %v\n", weberr)
+	}
+
+	// interact(&tdg)
 	// tdg.RollDice()
 }

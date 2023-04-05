@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Talking shit?!?!</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a class="logo" href="/">Talking shit?</a>
+        <form action="/play" method="POST">
+          <input
+            autofocus
+            class="search-input"
+            value=""
+            placeholder="Command me!"
+            type="text"
+            name="move"
+          />
+        </form>
+        <a
+          href="https://github.com/freshman-tech/news"
+          class="button github-button"
+          >Do Not Press This Button</a
+        >
+      </header>
+      <section class="container">
+        Started at: {{start}}
+        <ul class="game-row2">
+            <li>
+                Foo!
+            </li>
+            <li>Bar!
+            {% comment %}
+            <!--
+            </li>
+            <li>Game {{.ID}} with {{JoinStrings .Players}}</li>
+            <li>{{.CurPlayer}} is rolling ({{.CurTurn.NumRolls}})</li>
+            {{if .eq 0 .CurTurn.NumRolls}}
+            <li>And we're stillllll waaaaaaaaaaaiting ....</li>
+            {{else}}
+            <li>Roll, baby, roll!</li>
+            {{end}}
+            #}
+            -->
+            {% endcomment %}
+            <li>Game {{ dicegame.ID }} with {{dicegame.Players | join:", "}}</li>
+            <li>{{dicegame.CurPlayer}} is rolling</li>
+            {% if (dicegame.CurrentTurn().NumRolls == 0) %}
+            <li>And weeeeeeeerrrrre waaaaaaaaaaaiting ...</li>
+            {% else %}
+            {% for roll in dicegame.CurrentTurn().Rolls %}
+            <li>
+               Roll! 
+            </li>
+            {% endfor %}
+            {% endif %}
+            <li>How many turns? => {{ dicegame.Turns }}</li>
+            {% for turn in dicegame.Turns %}
+            <li>
+                {{ turn }} ({{turn.Score}})
+                
+            </li>
+            {% endfor %}
+
+        </ul>
+      </section> 
+    </main>
+    
+  </body>
+</html>
